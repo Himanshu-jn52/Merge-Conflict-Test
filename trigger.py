@@ -83,7 +83,7 @@ _PLACEHOLDER_PATTERNS = [
 
 def should_generate(description: str) -> bool:
     """Return True if the CL description looks empty/default."""
-    cleaned = description.strip().lower()
+    cleaned = description.strip().lower()  # strip whitespace and normalize to lowercase for comparison
     if not cleaned:
         return True
     return any(cleaned == p for p in _PLACEHOLDER_PATTERNS)
