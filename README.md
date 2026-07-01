@@ -12,6 +12,10 @@ This repository contains a Perforce AI trigger script (`trigger.py`) that automa
 - [Usage](#usage)
 - [Project Structure](#project-structure)
 - [Development](#development)
+  - [Running Locally](#running-locally)
+  - [Testing](#testing)
+  - [Merge Conflict Simulation](#merge-conflict-simulation)
+  - [Log File Analysis](#log-file-analysis)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
@@ -175,7 +179,19 @@ $ p4 submit -d "Fix login validation bug"
 4. **Apply**: The generated description is applied to the changelist
 5. **Non-Blocking Exit**: The trigger always exits successfully (code 0), ensuring submits are never blocked
 
-## trigger.py Key Components
+## Project Structure
+
+```
+.
+├── trigger.py                    # Main Perforce trigger script
+├── scripts/
+│   └── simulate_conflicts.py     # Merge conflict simulation tool for testing
+├── test_simulate_conflicts.py    # Test suite for conflict simulation script
+├── README.md                     # This file
+└── LICENSE                       # MIT License
+```
+
+### trigger.py Key Components
 
 The `trigger.py` script is the main trigger implementation, containing:
 
@@ -210,6 +226,82 @@ To test the trigger behavior:
 3. Submit with an empty or placeholder description
 4. Check the log file for trigger execution details
 5. Verify the description was updated
+
+### Merge Conflict Simulation
+
+The `scripts/simulate_conflicts.py` script programmatically creates merge conflicts for testing and demos. This is useful for:
+- Testing merge conflict resolution workflows
+- Demonstrating conflict scenarios in training
+- CI integration tests that require reproducible conflicts
+- Local development testing
+
+**Available conflict scenarios:**
+
+- `content`: Two branches modify the same lines with different content (default)
+- `delete-modify`: One branch deletes a file while another modifies it
+- `rename`: Both branches rename the same file to different names
+- `type-change`: One branch replaces a file with a directory
+
+**Usage examples:**
+
+```bash
+# Create a content conflict (default scenario)
+python3 scripts/simulate_conflicts.py
+
+# Create a delete-modify conflict
+python3 scripts/simulate_conflicts.py --scenario delete-modify
+
+# Create a rename conflict
+python3 scripts/simulate_conflicts.py --scenario rename
+
+# Create a type-change conflict
+python3 scripts/simulate_conflicts.py --scenario type-change
+
+# Dry-run to see what would happen without executing
+python3 scripts/simulate_conflicts.py --dry-run
+
+# Clean up test branches after demonstration
+python3 scripts/simulate_conflicts.py --cleanup
+
+# Enable verbose logging
+python3 scripts/simulate_conflicts.py --scenario rename --verbose
+```
+
+**Expected output for content conflict:**
+
+```bash
+$ python3 scripts/simulate_conflicts.py
+2026-07-01T10:30:15 [INFO] === Simulating CONTENT conflict ===
+2026-07-01T10:30:15 [INFO] Ensuring clean state...
+2026-07-01T10:30:15 [INFO] Creating branch: conflict-test-a-content
+2026-07-01T10:30:15 [INFO] Branch A: Modifying trigger.py
+2026-07-01T10:30:15 [INFO] Committing changes: Branch A: Update log format to use changelist= prefix
+2026-07-01T10:30:16 [INFO] Creating branch: conflict-test-b-content
+2026-07-01T10:30:16 [INFO] Branch B: Modifying trigger.py
+2026-07-01T10:30:16 [INFO] Committing changes: Branch B: Update log format with dash separators
+2026-07-01T10:30:17 [INFO] Attempting merge of conflict-test-a-content...
+2026-07-01T10:30:17 [INFO] ✓ Merge conflict detected (as expected)
+2026-07-01T10:30:17 [INFO] Conflict status:
+UU trigger.py
+
+2026-07-01T10:30:17 [INFO] ✓ Successfully created content conflict!
+2026-07-01T10:30:17 [INFO]   Branches: conflict-test-a-content, conflict-test-b-content
+2026-07-01T10:30:17 [INFO]   Conflicting file: trigger.py
+2026-07-01T10:30:17 [INFO]   To resolve: git merge --abort
+```
+
+**Usage in CI:**
+
+```yaml
+# Example GitHub Actions workflow
+- name: Test merge conflict handling
+  run: |
+    python3 scripts/simulate_conflicts.py --scenario content
+    # Your conflict resolution test logic here
+    python3 scripts/simulate_conflicts.py --cleanup
+```
+
+**Note**: The script requires a clean working directory (no uncommitted changes) and will automatically switch to the main branch before creating test branches.
 
 ### Log File Analysis
 
