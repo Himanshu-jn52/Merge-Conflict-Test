@@ -219,6 +219,40 @@ python3 trigger.py 12345
 
 ### Testing
 
+#### Running the Test Suite
+
+The project includes a comprehensive unit test suite covering various merge conflict scenarios. To run the tests:
+
+```bash
+# Run all tests with verbose output
+python3 -m unittest tests.test_merge_conflicts -v
+
+# Run a specific test
+python3 -m unittest tests.test_merge_conflicts.TestMergeConflicts.test_overlapping_edits_conflict
+
+# Run tests with coverage (if coverage.py is installed)
+python3 -m coverage run -m unittest discover -s tests
+python3 -m coverage report
+```
+
+**Test Coverage:**
+
+The test suite covers 9+ representative merge conflict scenarios:
+
+1. **Overlapping edits** - Two branches modify the same lines with different content
+2. **Deleted vs modified** - One branch deletes a file while another modifies it
+3. **Binary file conflicts** - Conflicting changes to binary files
+4. **Whitespace-only conflicts** - Changes differing only in whitespace
+5. **Renamed file conflicts** - Both branches rename the same file to different names
+6. **New file conflicts** - Both branches create the same new file with different content
+7. **Complex multi-way conflicts** - Multiple conflicting changes across different file sections
+8. **Large file conflicts** - Conflicts in files >1MB to test performance
+9. **Multiple files conflicts** - Simultaneous conflicts across multiple files
+
+All tests are deterministic, run in isolated temporary repositories, and automatically clean up after execution.
+
+#### Testing the Trigger Behavior
+
 To test the trigger behavior:
 
 1. Create a test changelist
