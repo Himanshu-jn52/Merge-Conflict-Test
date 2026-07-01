@@ -107,6 +107,7 @@ class TestMergeConflicts(unittest.TestCase):
     def tearDown(self) -> None:
         """Clean up test environment after each test."""
         import shutil
+        import stat
 
         # Abort any in-progress merge
         subprocess.run(
@@ -128,10 +129,30 @@ class TestMergeConflicts(unittest.TestCase):
             timeout=10
         )
 
-        # Clean up test directory
+        # Clean up test directory with permission error handling
         if self.test_dir.exists():
-            shutil.rmtree(self.test_dir)
-            log.info(f"Cleaned up test repository at {self.repo_dir}")
+            def handle_remove_readonly(func, path, exc):
+                """Error handler for Windows/permission issues during rmtree."""
+                if hasattr(exc, 'winerror'):
+                    # Windows-specific error handling
+                    if exc.winerror == 5:  # Access denied
+                        import os
+                        os.chmod(path, stat.S_IWRITE)
+                        func(path)
+                else:
+                    # Unix permission issues
+                    try:
+                        import os
+                        os.chmod(path, stat.S_IWUSR | stat.S_IRUSR | stat.S_IXUSR)
+                        func(path)
+                    except Exception:
+                        pass  # Best effort cleanup
+
+            try:
+                shutil.rmtree(self.test_dir, onerror=handle_remove_readonly)
+                log.info(f"Cleaned up test repository at {self.repo_dir}")
+            except Exception as e:
+                log.warning(f"Cleanup encountered error (non-critical): {e}")
 
     def _run_git(self, cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
         """Execute a git command in the test repository.
