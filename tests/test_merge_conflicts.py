@@ -61,6 +61,16 @@ class TestMergeConflicts(unittest.TestCase):
             timeout=10
         )
 
+        # Configure whitespace handling for deterministic test behavior
+        subprocess.run(
+            ["git", "config", "core.whitespace", "trailing-space,tab-in-indent"],
+            cwd=self.repo_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
         # Create initial commit
         base_file = self.repo_dir / "base.txt"
         base_file.write_text("Initial content\nLine 2\nLine 3\n")
@@ -295,12 +305,9 @@ class TestMergeConflicts(unittest.TestCase):
         """Test conflict scenario: Whitespace-only conflicts.
 
         Two branches modify the same lines with only whitespace differences,
-        potentially creating conflicts depending on git configuration.
+        creating conflicts due to the core.whitespace config set in setUp().
         """
         log.info("Testing whitespace-only conflict")
-
-        # Set explicit git config to make whitespace handling deterministic
-        self._run_git(["git", "config", "core.whitespace", "trailing-space,tab-in-indent"])
 
         target_file = self.repo_dir / "whitespace_test.txt"
         target_file.write_text("Line 1\nLine 2\nLine 3\n")
