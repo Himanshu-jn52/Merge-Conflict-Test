@@ -50,17 +50,56 @@ log = logging.getLogger("simulate_conflicts")
 class ConflictScenario:
     """Encapsulates branch creation, file modification, and merge conflict generation."""
 
-    def __init__(self, scenario_type: str, dry_run: bool = False):
+    def __init__(self, scenario_type: str, dry_run: bool = False, base_branch: Optional[str] = None, target_file: Optional[str] = None):
         """Initialize conflict scenario.
 
         :param scenario_type: Type of conflict to simulate
         :param dry_run: If True, show what would happen without executing
+        :param base_branch: Base branch name (auto-detected if None)
+        :param target_file: Target file for conflicts (auto-detected if None)
         """
         self.scenario_type = scenario_type
         self.dry_run = dry_run
-        self.base_branch = "main"
+        self.base_branch = base_branch or self._detect_base_branch()
+        self.target_file = target_file
+        self.original_branch = self._get_current_branch() if not dry_run else None
         self.branch_a = f"conflict-test-a-{scenario_type}"
         self.branch_b = f"conflict-test-b-{scenario_type}"
+
+    def _detect_base_branch(self) -> str:
+        """Detect the default branch name dynamically.
+
+        :return: Base branch name (e.g., 'main', 'master')
+        """
+        if self.dry_run:
+            return "main"
+
+        try:
+            # Try to get the default branch from origin
+            result = subprocess.run(
+                ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            # Output is like 'refs/remotes/origin/main', extract 'main'
+            branch = result.stdout.strip().split("/")[-1]
+            log.debug(f"Detected base branch: {branch}")
+            return branch
+        except subprocess.CalledProcessError:
+            # Fallback: check if 'main' or 'master' exists
+            for candidate in ["main", "master"]:
+                result = subprocess.run(
+                    ["git", "rev-parse", "--verify", candidate],
+                    capture_output=True
+                )
+                if result.returncode == 0:
+                    log.debug(f"Detected base branch: {candidate}")
+                    return candidate
+
+            # Last resort: use current branch
+            log.warning("Could not detect default branch, using current branch")
+            return self._get_current_branch()
 
     def _run_git(self, cmd: list[str], check: bool = True, capture_output: bool = False) -> Optional[subprocess.CompletedProcess]:
         """Execute git command with logging and dry-run support.
@@ -125,13 +164,19 @@ class ConflictScenario:
         log.info(f"Creating branch: {branch_name}")
         self._run_git(["git", "checkout", "-b", branch_name, self.base_branch])
 
-    def _commit_changes(self, message: str) -> None:
-        """Stage and commit all changes.
+    def _commit_changes(self, message: str, files: Optional[list[str]] = None) -> None:
+        """Stage and commit changes.
 
         :param message: Commit message
+        :param files: Specific files to stage (None = use -u for tracked changes only)
         """
         log.info(f"Committing changes: {message}")
-        self._run_git(["git", "add", "-A"])
+        if files:
+            for f in files:
+                self._run_git(["git", "add", f])
+        else:
+            # Use -u to only stage changes to tracked files, not new untracked files
+            self._run_git(["git", "add", "-u"])
         self._run_git(["git", "commit", "-m", message])
 
     def _attempt_merge(self, branch_name: str) -> bool:
@@ -168,40 +213,50 @@ class ConflictScenario:
     def simulate_content_conflict(self) -> None:
         """Simulate a content conflict by modifying the same lines differently."""
         log.info("=== Simulating CONTENT conflict ===")
-        target_file = Path("trigger.py")
+
+        # Use provided target file or default to README.md (more universal than trigger.py)
+        target_file = Path(self.target_file) if self.target_file else Path("README.md")
+
+        if not self.dry_run and not target_file.exists():
+            log.error(f"Target file {target_file} does not exist. Use --target-file to specify a different file.")
+            sys.exit(1)
 
         self._ensure_clean_state()
 
-        # Branch A: Modify logging format
+        # Branch A: Modify first heading or line
         self._create_branch(self.branch_a)
         log.info(f"Branch A: Modifying {target_file}")
 
         if not self.dry_run:
             content = target_file.read_text()
-            # Modify line 45
-            modified = content.replace(
-                '_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s cl=%(cl)s %(message)s"',
-                '_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s changelist=%(cl)s | %(message)s"'
-            )
-            target_file.write_text(modified)
+            lines = content.split('\n')
+            if len(lines) > 0:
+                # Modify first non-empty line
+                for i, line in enumerate(lines):
+                    if line.strip():
+                        lines[i] = line + " [Branch A modification]"
+                        break
+                target_file.write_text('\n'.join(lines))
 
-        self._commit_changes("Branch A: Update log format to use changelist= prefix")
+        self._commit_changes("Branch A: Modify first line", [str(target_file)])
 
-        # Branch B: Modify logging format differently
+        # Branch B: Modify same line differently
         self._run_git(["git", "checkout", self.base_branch])
         self._create_branch(self.branch_b)
         log.info(f"Branch B: Modifying {target_file}")
 
         if not self.dry_run:
             content = target_file.read_text()
-            # Modify the same line differently
-            modified = content.replace(
-                '_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s cl=%(cl)s %(message)s"',
-                '_LOG_FORMAT = "%(asctime)s - %(levelname)s - %(name)s - CL:%(cl)s - %(message)s"'
-            )
-            target_file.write_text(modified)
+            lines = content.split('\n')
+            if len(lines) > 0:
+                # Modify same line differently
+                for i, line in enumerate(lines):
+                    if line.strip():
+                        lines[i] = line + " [Branch B different modification]"
+                        break
+                target_file.write_text('\n'.join(lines))
 
-        self._commit_changes("Branch B: Update log format with dash separators")
+        self._commit_changes("Branch B: Modify first line differently", [str(target_file)])
 
         # Attempt merge
         conflict_occurred = self._attempt_merge(self.branch_a)
@@ -217,7 +272,16 @@ class ConflictScenario:
     def simulate_delete_modify_conflict(self) -> None:
         """Simulate a delete-modify conflict."""
         log.info("=== Simulating DELETE-MODIFY conflict ===")
-        target_file = Path("LICENSE")
+
+        # Use provided target file or try LICENSE, fallback to README.md
+        if self.target_file:
+            target_file = Path(self.target_file)
+        else:
+            target_file = Path("LICENSE") if Path("LICENSE").exists() or self.dry_run else Path("README.md")
+
+        if not self.dry_run and not target_file.exists():
+            log.error(f"Target file {target_file} does not exist. Use --target-file to specify a different file.")
+            sys.exit(1)
 
         self._ensure_clean_state()
 
@@ -226,7 +290,7 @@ class ConflictScenario:
         log.info(f"Branch A: Deleting {target_file}")
         if not self.dry_run:
             target_file.unlink()
-        self._commit_changes(f"Branch A: Remove {target_file}")
+        self._commit_changes(f"Branch A: Remove {target_file}", [str(target_file)])
 
         # Branch B: Modify the file
         self._run_git(["git", "checkout", self.base_branch])
@@ -235,10 +299,10 @@ class ConflictScenario:
 
         if not self.dry_run:
             content = target_file.read_text()
-            modified = content + "\n\n# Additional terms and conditions\n"
+            modified = content + "\n\n# Additional content added by Branch B\n"
             target_file.write_text(modified)
 
-        self._commit_changes(f"Branch B: Update {target_file} with additional terms")
+        self._commit_changes(f"Branch B: Update {target_file}", [str(target_file)])
 
         # Attempt merge
         conflict_occurred = self._attempt_merge(self.branch_a)
@@ -254,19 +318,29 @@ class ConflictScenario:
     def simulate_rename_conflict(self) -> None:
         """Simulate a rename conflict where both branches rename the same file."""
         log.info("=== Simulating RENAME conflict ===")
-        original_file = Path("trigger.py")
-        rename_a = Path("p4ai_trigger.py")
-        rename_b = Path("perforce_trigger.py")
+
+        # Use provided target file or default to README.md
+        original_file = Path(self.target_file) if self.target_file else Path("README.md")
+
+        if not self.dry_run and not original_file.exists():
+            log.error(f"Target file {original_file} does not exist. Use --target-file to specify a different file.")
+            sys.exit(1)
+
+        # Generate generic rename targets
+        stem = original_file.stem
+        suffix = original_file.suffix
+        rename_a = Path(f"{stem}_version_a{suffix}")
+        rename_b = Path(f"{stem}_version_b{suffix}")
 
         self._ensure_clean_state()
 
-        # Branch A: Rename to p4ai_trigger.py
+        # Branch A: Rename to version_a
         self._create_branch(self.branch_a)
         log.info(f"Branch A: Renaming {original_file} to {rename_a}")
         self._run_git(["git", "mv", str(original_file), str(rename_a)])
         self._commit_changes(f"Branch A: Rename to {rename_a}")
 
-        # Branch B: Rename to perforce_trigger.py
+        # Branch B: Rename to version_b
         self._run_git(["git", "checkout", self.base_branch])
         self._create_branch(self.branch_b)
         log.info(f"Branch B: Renaming {original_file} to {rename_b}")
@@ -293,34 +367,37 @@ class ConflictScenario:
 
         self._ensure_clean_state()
 
-        # Create initial file in main if it doesn't exist
-        if not self.dry_run and not target_path.exists():
-            target_path.write_text("# Original file\n")
-            self._run_git(["git", "add", str(target_path)])
-            self._commit_changes(f"Add {target_path} as file")
+        # Check if file already exists on base branch
+        file_exists_on_base = not self.dry_run and target_path.exists()
 
-        # Branch A: Keep as file, modify content
+        if not file_exists_on_base and not self.dry_run:
+            log.warning(f"{target_path} does not exist on base branch. Creating it on test branches only.")
+
+        # Branch A: Create/modify as file
         self._create_branch(self.branch_a)
-        log.info(f"Branch A: Modifying {target_path} as file")
+        log.info(f"Branch A: Creating/modifying {target_path} as file")
 
         if not self.dry_run:
-            content = target_path.read_text()
-            target_path.write_text(content + "\n# Branch A modifications\n")
+            if not file_exists_on_base:
+                target_path.write_text("# Original file created on Branch A\n")
+            else:
+                content = target_path.read_text()
+                target_path.write_text(content + "\n# Branch A modifications\n")
 
-        self._commit_changes(f"Branch A: Update {target_path} file")
+        self._commit_changes(f"Branch A: Update {target_path} file", [str(target_path)])
 
-        # Branch B: Replace file with directory
+        # Branch B: Create as directory or replace with directory
         self._run_git(["git", "checkout", self.base_branch])
         self._create_branch(self.branch_b)
-        log.info(f"Branch B: Replacing {target_path} with directory")
+        log.info(f"Branch B: Creating/replacing {target_path} with directory")
 
         if not self.dry_run:
-            target_path.unlink()
-            target_path.mkdir()
+            if file_exists_on_base:
+                target_path.unlink()
+            target_path.mkdir(exist_ok=True)
             (target_path / "README.md").write_text("# This is now a directory\n")
-            self._run_git(["git", "add", str(target_path)])
 
-        self._commit_changes(f"Branch B: Replace {target_path} with directory")
+        self._commit_changes(f"Branch B: Replace {target_path} with directory", [str(target_path)])
 
         # Attempt merge
         conflict_occurred = self._attempt_merge(self.branch_a)
@@ -329,8 +406,8 @@ class ConflictScenario:
             log.info("\n✓ Successfully created type-change conflict!")
             log.info(f"  Branches: {self.branch_a}, {self.branch_b}")
             log.info(f"  Path: {target_path}")
-            log.info(f"  Branch A: kept as file")
-            log.info(f"  Branch B: changed to directory")
+            log.info(f"  Branch A: file")
+            log.info(f"  Branch B: directory")
             log.info(f"  To resolve: git merge --abort")
         else:
             log.warning("\n✗ Failed to create type-change conflict")
@@ -343,8 +420,22 @@ class ConflictScenario:
         log.info("Aborting any in-progress merge...")
         self._run_git(["git", "merge", "--abort"], check=False)
 
-        # Return to main branch
-        self._run_git(["git", "checkout", self.base_branch])
+        # Determine where to return
+        current_branch = self._get_current_branch() if not self.dry_run else "main"
+        target_branch = self.base_branch
+
+        # If we saved the original branch and it's not one of the test branches, return there
+        if self.original_branch and self.original_branch not in [self.branch_a, self.branch_b]:
+            target_branch = self.original_branch
+            log.info(f"Returning to original branch: {target_branch}")
+        elif current_branch in [self.branch_a, self.branch_b]:
+            log.info(f"Returning to base branch: {target_branch}")
+        else:
+            log.info(f"Staying on current branch: {current_branch}")
+            target_branch = current_branch
+
+        if current_branch != target_branch:
+            self._run_git(["git", "checkout", target_branch])
 
         # Delete test branches
         for branch in [self.branch_a, self.branch_b]:
@@ -444,12 +535,29 @@ Conflict scenarios:
         help="Enable debug-level logging"
     )
 
+    parser.add_argument(
+        "--base-branch",
+        type=str,
+        help="Base branch name (auto-detected if not specified)"
+    )
+
+    parser.add_argument(
+        "--target-file",
+        type=str,
+        help="Target file for conflicts (defaults vary by scenario)"
+    )
+
     args = parser.parse_args()
 
     if args.verbose:
         log.setLevel(logging.DEBUG)
 
-    scenario = ConflictScenario(args.scenario, dry_run=args.dry_run)
+    scenario = ConflictScenario(
+        args.scenario,
+        dry_run=args.dry_run,
+        base_branch=args.base_branch,
+        target_file=args.target_file
+    )
 
     if args.cleanup:
         scenario.cleanup()

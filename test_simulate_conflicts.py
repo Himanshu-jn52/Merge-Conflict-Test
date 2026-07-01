@@ -17,7 +17,11 @@ class TestSimulateConflicts(unittest.TestCase):
 
     def setUp(self):
         """Set up test environment."""
+        # Test file is in repo root, script is in scripts/ subdirectory
         self.script_path = Path(__file__).parent / "scripts" / "simulate_conflicts.py"
+        if not self.script_path.exists():
+            # Fallback: maybe we're running from a different location
+            self.script_path = Path("scripts/simulate_conflicts.py").resolve()
         self.assertTrue(self.script_path.exists(), f"Script not found at {self.script_path}")
 
     def tearDown(self):
