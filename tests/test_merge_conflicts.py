@@ -373,11 +373,10 @@ class TestMergeConflicts(unittest.TestCase):
 
         # Verify both renamed files appear in the status/unmerged output
         combined_output = status_result.stdout + unmerged_result.stdout
-        self.assertTrue(
-            ("renamed_to_a.txt" in combined_output or "original_name.txt" in combined_output) and
-            ("renamed_to_b.txt" in combined_output or "original_name.txt" in combined_output),
-            "Both renamed file paths should appear in conflict status"
-        )
+        self.assertIn("renamed_to_a.txt", combined_output,
+                      "renamed_to_a.txt should appear in conflict status")
+        self.assertIn("renamed_to_b.txt", combined_output,
+                      "renamed_to_b.txt should appear in conflict status")
         log.info("✓ Renamed file conflict test passed")
 
     def test_new_file_conflict(self) -> None:
