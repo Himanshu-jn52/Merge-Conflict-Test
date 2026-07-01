@@ -27,16 +27,24 @@ class TestMergeConflicts(unittest.TestCase):
         """Set up test environment before each test."""
         import tempfile
         import shutil
+        import os
 
-        # Create temporary test repository
-        self.test_dir = Path(tempfile.mkdtemp(prefix="test_conflicts_"))
+        # Create temporary test repository in a truly isolated location
+        # Use /tmp explicitly to avoid any workspace interaction
+        temp_base = os.environ.get('TMPDIR', '/tmp')
+        self.test_dir = Path(tempfile.mkdtemp(prefix="test_conflicts_", dir=temp_base))
         self.repo_dir = self.test_dir / "repo"
-        self.repo_dir.mkdir()
+        self.repo_dir.mkdir(mode=0o755)
 
-        # Initialize git repository
+        # Initialize git repository with explicit isolation from parent repo
+        env = os.environ.copy()
+        # Ensure no git config from parent affects us
+        env['GIT_CONFIG_NOSYSTEM'] = '1'
+
         subprocess.run(
             ["git", "init"],
             cwd=self.repo_dir,
+            env=env,
             check=True,
             capture_output=True,
             text=True,
