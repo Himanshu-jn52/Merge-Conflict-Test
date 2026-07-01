@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -210,6 +211,14 @@ class ConflictScenario:
             log.warning("✗ Merge succeeded without conflict (unexpected)")
             return False
 
+    def _restore_original_branch(self) -> None:
+        """Restore original branch after creating conflict (if appropriate)."""
+        if self.original_branch and self.original_branch not in [self.branch_a, self.branch_b]:
+            log.info(f"Restoring original branch: {self.original_branch}")
+            # Abort the merge first to avoid conflicts when switching
+            self._run_git(["git", "merge", "--abort"], check=False)
+            self._run_git(["git", "checkout", self.original_branch])
+
     def simulate_content_conflict(self) -> None:
         """Simulate a content conflict by modifying the same lines differently."""
         log.info("=== Simulating CONTENT conflict ===")
@@ -266,6 +275,7 @@ class ConflictScenario:
             log.info(f"  Branches: {self.branch_a}, {self.branch_b}")
             log.info(f"  Conflicting file: {target_file}")
             log.info(f"  To resolve: git merge --abort")
+            self._restore_original_branch()
         else:
             log.warning("\n✗ Failed to create content conflict")
 
@@ -312,6 +322,7 @@ class ConflictScenario:
             log.info(f"  Branches: {self.branch_a}, {self.branch_b}")
             log.info(f"  Conflicting file: {target_file}")
             log.info(f"  To resolve: git merge --abort")
+            self._restore_original_branch()
         else:
             log.warning("\n✗ Failed to create delete-modify conflict")
 
@@ -357,6 +368,7 @@ class ConflictScenario:
             log.info(f"  Branch A renamed to: {rename_a}")
             log.info(f"  Branch B renamed to: {rename_b}")
             log.info(f"  To resolve: git merge --abort")
+            self._restore_original_branch()
         else:
             log.warning("\n✗ Failed to create rename conflict")
 
@@ -409,6 +421,7 @@ class ConflictScenario:
             log.info(f"  Branch A: file")
             log.info(f"  Branch B: directory")
             log.info(f"  To resolve: git merge --abort")
+            self._restore_original_branch()
         else:
             log.warning("\n✗ Failed to create type-change conflict")
 
@@ -422,17 +435,18 @@ class ConflictScenario:
 
         # Determine where to return
         current_branch = self._get_current_branch() if not self.dry_run else "main"
-        target_branch = self.base_branch
 
-        # If we saved the original branch and it's not one of the test branches, return there
+        # Simplified logic: original branch if available and not a test branch,
+        # else base branch if currently on test branch, else stay put
         if self.original_branch and self.original_branch not in [self.branch_a, self.branch_b]:
             target_branch = self.original_branch
             log.info(f"Returning to original branch: {target_branch}")
         elif current_branch in [self.branch_a, self.branch_b]:
+            target_branch = self.base_branch
             log.info(f"Returning to base branch: {target_branch}")
         else:
-            log.info(f"Staying on current branch: {current_branch}")
             target_branch = current_branch
+            log.info(f"Staying on current branch: {current_branch}")
 
         if current_branch != target_branch:
             self._run_git(["git", "checkout", target_branch])
@@ -447,7 +461,6 @@ class ConflictScenario:
             target_path = Path("conflicting_item")
             if target_path.exists():
                 if target_path.is_dir():
-                    import shutil
                     shutil.rmtree(target_path)
                 else:
                     target_path.unlink()
