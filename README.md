@@ -1,6 +1,6 @@
-# p4ai - Perforce AI Trigger
+# Merge-Conflict-Test
 
-**p4ai** is a Perforce trigger script that automatically generates AI-powered changelist descriptions for submissions with empty or placeholder descriptions.
+This repository contains a Perforce AI trigger script (`trigger.py`) that automatically generates AI-powered changelist descriptions for submissions with empty or placeholder descriptions.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-p4ai integrates with Perforce as a `change-commit` trigger to enhance developer workflows by automatically generating meaningful changelist descriptions using AI. When a changelist is submitted with an empty or default placeholder description, p4ai analyzes the changes and generates a descriptive summary automatically.
+The `trigger.py` script integrates with Perforce as a `change-commit` trigger to enhance developer workflows by automatically generating meaningful changelist descriptions using AI. When a changelist is submitted with an empty or default placeholder description, the trigger analyzes the changes and generates a descriptive summary automatically.
 
 The trigger is designed to be non-blocking and fail-safe: it never prevents a submit from succeeding, even if AI generation fails.
 
@@ -26,7 +26,7 @@ The trigger is designed to be non-blocking and fail-safe: it never prevents a su
 
 - **Automatic Description Generation**: Detects empty or placeholder changelist descriptions and auto-generates meaningful descriptions using AI
 - **Non-Blocking Behavior**: Never blocks a submit operation, even on failures or errors
-- **Smart Detection**: Recognizes common placeholder patterns like:
+- **Smart Detection**: Recognizes these placeholder patterns (case-insensitive):
   - Empty descriptions
   - `<enter description here>`
   - `enter description here`
@@ -38,17 +38,20 @@ The trigger is designed to be non-blocking and fail-safe: it never prevents a su
 
 - **Python 3.x** (Python 3.7 or higher recommended)
 - **Perforce Server**: Access to a Perforce server with trigger configuration permissions
-- **p4ai Package**: The `p4ai` Python package and its dependencies must be installed and accessible to the Perforce server's OS user
+- **p4ai Package**: The `p4ai` Python package and its dependencies must be installed and accessible to the Perforce server's OS user (this is internal/unreleased software - see installation instructions)
 - **AI Provider Access**: Valid API keys for the configured AI provider (e.g., OpenAI, Anthropic)
 
 ## Installation
 
 ### 1. Install the p4ai Package
 
-Ensure the `p4ai` package is installed in the Python environment accessible to the Perforce server user:
+Ensure the `p4ai` package is installed in the Python environment accessible to the Perforce server user. Since this is internal/unreleased software, installation steps will depend on your organization's deployment process (e.g., installing from a private repository, local wheel file, or source):
 
 ```bash
-pip install p4ai
+# Example: Install from source or private repository
+pip install /path/to/p4ai-package
+# OR
+pip install git+https://your-internal-repo/p4ai.git
 ```
 
 ### 2. Configure the Perforce Trigger
@@ -61,19 +64,25 @@ p4 triggers
 
 Add one of the following entries:
 
-**Option A: Direct Python Script**
+**Option A: Direct Execution (if executable bit is set)**
+```
+Triggers:
+    p4ai-describe change-commit //... "/path/to/trigger.py %changelist%"
+```
+
+**Option B: Explicit Python Interpreter**
 ```
 Triggers:
     p4ai-describe change-commit //... "/usr/bin/python3 /path/to/trigger.py %changelist%"
 ```
 
-**Option B: Using p4ai CLI (if installed as a command-line tool)**
+**Option C: Using p4ai CLI (if installed as a command-line tool)**
 ```
 Triggers:
     p4ai-describe change-commit //... "p4ai trigger-run %changelist%"
 ```
 
-Replace `/path/to/trigger.py` with the actual path to the `trigger.py` script.
+Replace `/path/to/trigger.py` with the actual path to the `trigger.py` script. For Option A, ensure the script has execute permissions (`chmod +x trigger.py`).
 
 ### 3. Set Permissions
 
@@ -86,14 +95,14 @@ Ensure the Perforce server's OS user has:
 
 ### Environment Variables
 
-The trigger supports the following environment variables:
+Environment variables recognized by the p4ai system and this trigger:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `P4AI_PROVIDER` | AI provider to use (e.g., `openai`, `anthropic`) | Required |
-| `P4PORT` | Perforce server address | Required |
-| `P4USER` | Perforce user for trigger operations | Required |
-| `P4AI_LOG_FILE` | Path to the log file | `/tmp/p4ai_trigger.log` |
+| `P4AI_PROVIDER` | AI provider to use (e.g., `openai`, `anthropic`) | Required (unless configured in `~/.p4ai/config.json`) |
+| `P4PORT` | Perforce server address | Required (unless configured in `~/.p4ai/config.json`) |
+| `P4USER` | Perforce user for trigger operations | Required (unless configured in `~/.p4ai/config.json`) |
+| `P4AI_LOG_FILE` | Path to the log file (read directly by trigger.py) | `/tmp/p4ai_trigger.log` |
 
 ### Configuration File
 
@@ -108,7 +117,9 @@ Alternatively, create a configuration file at `~/.p4ai/config.json` (relative to
 }
 ```
 
-**Important**: The configuration file and API keys must be accessible to the OS user running the Perforce server process.
+**Important**: 
+- The configuration file and API keys must be accessible to the OS user running the Perforce server process.
+- **Security Warning**: Never commit config files with real API keys to version control. Consider using environment variables for secrets in production environments.
 
 ### Setting Environment Variables
 
@@ -158,28 +169,20 @@ $ p4 submit -d "Fix login validation bug"
 
 ### How It Works
 
-1. **Trigger Fires**: Perforce calls the trigger script after a changelist is submitted
-2. **Description Check**: The script checks if the description is empty or a placeholder
+1. **Trigger Fires**: Perforce calls the trigger script during changelist submission (as part of the submit process)
+2. **Description Check**: The script checks if the description is empty or a placeholder (case-insensitive matching)
 3. **AI Generation**: If needed, p4ai analyzes the changelist diff and generates a description
 4. **Apply**: The generated description is applied to the changelist
 5. **Non-Blocking Exit**: The trigger always exits successfully (code 0), ensuring submits are never blocked
 
-## Project Structure
+## trigger.py Key Components
 
-```
-.
-├── trigger.py           # Main trigger script
-├── LICENSE             # MIT License
-└── README.md           # This file
-```
+The `trigger.py` script is the main trigger implementation, containing:
 
-### Key Components
-
-- **`trigger.py`**: The main trigger script containing:
-  - `should_generate(description)`: Determines if a description needs AI generation
-  - `main()`: Entry point that orchestrates the trigger workflow
-  - Logging configuration with rotating file handlers
-  - Non-blocking error handling
+- **`should_generate(description)`**: Determines if a description needs AI generation using case-insensitive pattern matching
+- **`main()`**: Entry point that orchestrates the trigger workflow
+- **Logging configuration**: Rotating file handlers for production use
+- **Non-blocking error handling**: Ensures submits are never blocked by failures
 
 ## Development
 
@@ -250,9 +253,13 @@ Log entries include:
 
 ### Debug Mode
 
-To enable more verbose logging, modify the `trigger.py` script:
+To enable more verbose logging, modify the `trigger.py` script (line 48):
 
 ```python
+# Change from:
+logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT, datefmt=_DATE_FORMAT)
+
+# To:
 logging.basicConfig(level=logging.DEBUG, format=_LOG_FORMAT, datefmt=_DATE_FORMAT)
 ```
 
