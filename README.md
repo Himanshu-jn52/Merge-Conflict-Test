@@ -245,7 +245,7 @@ The `scripts/simulate_conflicts.py` script programmatically creates merge confli
 **Usage examples:**
 
 ```bash
-# Create a content conflict (default scenario)
+# Create a content conflict (default scenario, uses README.md)
 python3 scripts/simulate_conflicts.py
 
 # Create a delete-modify conflict
@@ -256,6 +256,12 @@ python3 scripts/simulate_conflicts.py --scenario rename
 
 # Create a type-change conflict
 python3 scripts/simulate_conflicts.py --scenario type-change
+
+# Specify a custom target file
+python3 scripts/simulate_conflicts.py --scenario content --target-file trigger.py
+
+# Specify a custom base branch
+python3 scripts/simulate_conflicts.py --base-branch master
 
 # Dry-run to see what would happen without executing
 python3 scripts/simulate_conflicts.py --dry-run
@@ -274,19 +280,19 @@ $ python3 scripts/simulate_conflicts.py
 2026-07-01T10:30:15 [INFO] === Simulating CONTENT conflict ===
 2026-07-01T10:30:15 [INFO] Ensuring clean state...
 2026-07-01T10:30:15 [INFO] Creating branch: conflict-test-a-content
-2026-07-01T10:30:15 [INFO] Branch A: Modifying trigger.py
-2026-07-01T10:30:15 [INFO] Committing changes: Branch A: Update log format to use changelist= prefix
+2026-07-01T10:30:15 [INFO] Branch A: Modifying README.md
+2026-07-01T10:30:15 [INFO] Committing changes: Branch A: Modify first line
 2026-07-01T10:30:16 [INFO] Creating branch: conflict-test-b-content
-2026-07-01T10:30:16 [INFO] Branch B: Modifying trigger.py
-2026-07-01T10:30:16 [INFO] Committing changes: Branch B: Update log format with dash separators
+2026-07-01T10:30:16 [INFO] Branch B: Modifying README.md
+2026-07-01T10:30:16 [INFO] Committing changes: Branch B: Modify first line differently
 2026-07-01T10:30:17 [INFO] Attempting merge of conflict-test-a-content...
 2026-07-01T10:30:17 [INFO] ✓ Merge conflict detected (as expected)
 2026-07-01T10:30:17 [INFO] Conflict status:
-UU trigger.py
+UU README.md
 
 2026-07-01T10:30:17 [INFO] ✓ Successfully created content conflict!
 2026-07-01T10:30:17 [INFO]   Branches: conflict-test-a-content, conflict-test-b-content
-2026-07-01T10:30:17 [INFO]   Conflicting file: trigger.py
+2026-07-01T10:30:17 [INFO]   Conflicting file: README.md
 2026-07-01T10:30:17 [INFO]   To resolve: git merge --abort
 ```
 
@@ -301,7 +307,12 @@ UU trigger.py
     python3 scripts/simulate_conflicts.py --cleanup
 ```
 
-**Note**: The script requires a clean working directory (no uncommitted changes) and will automatically switch to the main branch before creating test branches.
+**Notes**:
+- The script requires a clean working directory (no uncommitted changes)
+- Base branch is auto-detected (main/master) or can be specified with `--base-branch`
+- Target files default to universal files (README.md, LICENSE) or can be customized with `--target-file`
+- After creating conflicts, use `git merge --abort` to clean up, or run the script with `--cleanup`
+- The script returns to your original branch after creating conflicts (unless it was a test branch)
 
 ### Log File Analysis
 
