@@ -34,6 +34,15 @@ class TestOverlappingEdits(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], check=True, capture_output=True, timeout=10)
 
+        # Get the default branch name dynamically
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        self.default_branch = result.stdout.strip()
+
     def tearDown(self):
         """Clean up test environment."""
         os.chdir(self.original_dir)
@@ -48,7 +57,7 @@ class TestOverlappingEdits(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Branch A changes"], check=True, capture_output=True, timeout=10)
 
         # Branch B: modify same line differently
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.test_file.write_text("Line 1\nLine 2 - Branch B change\nLine 3\n")
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
@@ -66,9 +75,9 @@ class TestOverlappingEdits(unittest.TestCase):
 
         # Verify conflict markers exist
         content = self.test_file.read_text()
-        self.assertIn("<<<<<<", content, "Conflict markers should be present")
-        self.assertIn(">>>>>>", content, "Conflict markers should be present")
-        self.assertIn("======", content, "Conflict markers should be present")
+        self.assertIn("<<<<<<<", content, "Conflict markers should be present")
+        self.assertIn(">>>>>>>", content, "Conflict markers should be present")
+        self.assertIn("=======", content, "Conflict markers should be present")
 
     def test_adjacent_line_modifications(self):
         """Test that adjacent line modifications merge cleanly without conflict."""
@@ -79,7 +88,7 @@ class TestOverlappingEdits(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Branch A changes"], check=True, capture_output=True, timeout=10)
 
         # Branch B: modify line 3
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.test_file.write_text("Line 1\nLine 2\nLine 3 - Branch B\n")
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
@@ -121,6 +130,15 @@ class TestDeleteModifyConflicts(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], check=True, capture_output=True, timeout=10)
 
+        # Get the default branch name dynamically
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        self.default_branch = result.stdout.strip()
+
     def tearDown(self):
         """Clean up test environment."""
         os.chdir(self.original_dir)
@@ -135,7 +153,7 @@ class TestDeleteModifyConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Delete file"], check=True, capture_output=True, timeout=10)
 
         # Branch B: modify the file
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-modify"], check=True, capture_output=True)
         self.test_file.write_text("Modified content\n")
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
@@ -171,7 +189,7 @@ class TestDeleteModifyConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Modify file"], check=True, capture_output=True, timeout=10)
 
         # Branch B: delete the file
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-delete"], check=True, capture_output=True)
         self.test_file.unlink()
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
@@ -208,6 +226,15 @@ class TestBinaryFileConflicts(unittest.TestCase):
         subprocess.run(["git", "add", str(self.binary_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], check=True, capture_output=True, timeout=10)
 
+        # Get the default branch name dynamically
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        self.default_branch = result.stdout.strip()
+
     def tearDown(self):
         """Clean up test environment."""
         os.chdir(self.original_dir)
@@ -222,7 +249,7 @@ class TestBinaryFileConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Branch A binary change"], check=True, capture_output=True, timeout=10)
 
         # Branch B: modify binary file differently
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.binary_file.write_bytes(b'\x89PNG\x0d\x0a\x1a\x0a' + b'\x02' * 100)
         subprocess.run(["git", "add", str(self.binary_file)], check=True, capture_output=True)
@@ -262,12 +289,23 @@ class TestWhitespaceConflicts(unittest.TestCase):
         subprocess.run(["git", "init"], check=True, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@example.com"], check=True, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test User"], check=True, capture_output=True)
+        # Ensure whitespace differences trigger conflicts
+        subprocess.run(["git", "config", "merge.renormalize", "false"], check=True, capture_output=True)
 
         # Create initial file with specific whitespace
         self.test_file = Path("whitespace.txt")
         self.test_file.write_text("Line 1\nLine 2\nLine 3\n")
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], check=True, capture_output=True, timeout=10)
+
+        # Get the default branch name dynamically
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        self.default_branch = result.stdout.strip()
 
     def tearDown(self):
         """Clean up test environment."""
@@ -283,7 +321,7 @@ class TestWhitespaceConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Add trailing spaces"], check=True, capture_output=True, timeout=10)
 
         # Branch B: add trailing tabs
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.test_file.write_text("Line 1\t\nLine 2\nLine 3\n")  # Tab at end
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
@@ -308,7 +346,7 @@ class TestWhitespaceConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Use tab indentation"], check=True, capture_output=True, timeout=10)
 
         # Branch B: use spaces for indentation
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.test_file.write_text("Line 1\n    Indented line\nLine 3\n")  # Space indent
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)

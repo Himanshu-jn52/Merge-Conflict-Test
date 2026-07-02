@@ -34,6 +34,15 @@ class TestRenamedFileConflicts(unittest.TestCase):
         subprocess.run(["git", "add", str(self.original_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], check=True, capture_output=True, timeout=10)
 
+        # Get the default branch name dynamically
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        self.default_branch = result.stdout.strip()
+
     def tearDown(self):
         """Clean up test environment."""
         os.chdir(self.original_dir)
@@ -47,7 +56,7 @@ class TestRenamedFileConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Rename to name_a"], check=True, capture_output=True, timeout=10)
 
         # Branch B: rename to name_b.txt
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         subprocess.run(["git", "mv", "original.txt", "name_b.txt"], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Rename to name_b"], check=True, capture_output=True, timeout=10)
@@ -84,7 +93,7 @@ class TestRenamedFileConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Rename file"], check=True, capture_output=True, timeout=10)
 
         # Branch B: modify the file
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-modify"], check=True, capture_output=True)
         self.original_file.write_text("Modified content\n")
         subprocess.run(["git", "add", str(self.original_file)], check=True, capture_output=True)
@@ -98,9 +107,12 @@ class TestRenamedFileConflicts(unittest.TestCase):
             timeout=10
         )
 
-        # This may or may not conflict depending on git version and settings
-        # At minimum, we verify git processes the merge
-        self.assertIn("merge", result.stdout.lower() + result.stderr.lower())
+        # Git should detect the rename and apply the modification to the renamed file
+        # Verify the renamed file exists with the modified content
+        renamed_path = Path("renamed.txt")
+        self.assertTrue(renamed_path.exists(), "Renamed file should exist after merge")
+        content = renamed_path.read_text()
+        self.assertIn("Modified", content, "Renamed file should contain the modification")
 
     def test_rename_with_content_conflict(self):
         """Test complex scenario: rename file and create content conflict."""
@@ -113,7 +125,7 @@ class TestRenamedFileConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Rename and modify"], check=True, capture_output=True, timeout=10)
 
         # Branch B: same rename but different content
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         subprocess.run(["git", "mv", "original.txt", "renamed.txt"], check=True, capture_output=True)
         renamed_path.write_text("Branch B content\n")
@@ -151,6 +163,15 @@ class TestNewFileConflicts(unittest.TestCase):
         subprocess.run(["git", "add", "README.md"], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], check=True, capture_output=True, timeout=10)
 
+        # Get the default branch name dynamically
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        self.default_branch = result.stdout.strip()
+
     def tearDown(self):
         """Clean up test environment."""
         os.chdir(self.original_dir)
@@ -167,7 +188,7 @@ class TestNewFileConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Add new feature (Branch A)"], check=True, capture_output=True, timeout=10)
 
         # Branch B: create same new file with content B
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         new_file.write_text("Feature implementation from Branch B\n")
         subprocess.run(["git", "add", str(new_file)], check=True, capture_output=True)
@@ -186,7 +207,7 @@ class TestNewFileConflicts(unittest.TestCase):
         # Verify conflict markers in the file
         if new_file.exists():
             content = new_file.read_text()
-            self.assertIn("<<<<<<", content, "Conflict markers should be present")
+            self.assertIn("<<<<<<<", content, "Conflict markers should be present")
 
     def test_same_new_file_identical_content(self):
         """Test that identical new files merge cleanly without conflict."""
@@ -200,7 +221,7 @@ class TestNewFileConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Add identical file"], check=True, capture_output=True, timeout=10)
 
         # Branch B: create same new file with identical content
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         new_file.write_text(identical_content)
         subprocess.run(["git", "add", str(new_file)], check=True, capture_output=True)
@@ -241,6 +262,15 @@ class TestComplexMultiWayConflicts(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], check=True, capture_output=True, timeout=10)
 
+        # Get the default branch name dynamically
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        self.default_branch = result.stdout.strip()
+
     def tearDown(self):
         """Clean up test environment."""
         os.chdir(self.original_dir)
@@ -272,7 +302,7 @@ class TestComplexMultiWayConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Modify header and footer (A)"], check=True, capture_output=True, timeout=10)
 
         # Branch B: modify sections 1 and 3 differently, leave middle unchanged
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.test_file.write_text(
             "Section 1: Header B\n"
@@ -296,7 +326,7 @@ class TestComplexMultiWayConflicts(unittest.TestCase):
 
         # Verify conflict occurred (git may combine into one region depending on proximity)
         content = self.test_file.read_text()
-        conflict_count = content.count("<<<<<<")
+        conflict_count = content.count("<<<<<<<")
         self.assertGreaterEqual(conflict_count, 1, "Should have at least one conflict region")
 
     def test_three_way_merge_with_base_change(self):
@@ -311,15 +341,15 @@ class TestComplexMultiWayConflicts(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Feature change"], check=True, capture_output=True, timeout=10)
 
-        # Advance master with different change
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        # Advance default branch with different change
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         self.test_file.write_text(
             "Section 1: Header (Master)\n"
             "Section 2: Content\n"
             "Section 3: Footer\n"
         )
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "Master change"], check=True, capture_output=True, timeout=10)
+        subprocess.run(["git", "commit", "-m", "Default branch change"], check=True, capture_output=True, timeout=10)
 
         # Attempt merge - three-way conflict
         result = subprocess.run(
@@ -347,7 +377,7 @@ class TestComplexMultiWayConflicts(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Feature A change"], check=True, capture_output=True, timeout=10)
 
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "feature-b"], check=True, capture_output=True)
         self.test_file.write_text(
             "Section 1: Header\n"
@@ -382,7 +412,7 @@ class TestComplexMultiWayConflicts(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Final B"], check=True, capture_output=True, timeout=10)
 
-        # Attempt final merge
+        # Attempt final merge - should produce a conflict
         result = subprocess.run(
             ["git", "merge", "--no-commit", "feature-a"],
             capture_output=True,
@@ -390,8 +420,8 @@ class TestComplexMultiWayConflicts(unittest.TestCase):
             timeout=10
         )
 
-        # Verify merge was processed (conflict or success)
-        self.assertIsNotNone(result.returncode, "Merge should complete with a result")
+        # Verify merge conflict occurred (non-zero return code indicates conflict)
+        self.assertNotEqual(result.returncode, 0, "Merge should fail due to conflict")
 
 
 def main():

@@ -33,6 +33,15 @@ class TestLargeFileConflicts(unittest.TestCase):
         subprocess.run(["git", "add", str(self.large_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], check=True, capture_output=True, timeout=10)
 
+        # Get the default branch name dynamically
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        self.default_branch = result.stdout.strip()
+
     def tearDown(self):
         """Clean up test environment."""
         os.chdir(self.original_dir)
@@ -59,7 +68,7 @@ class TestLargeFileConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Branch A: modify line 500"], check=True, capture_output=True, timeout=10)
 
         # Branch B: modify same line differently
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         content = self.large_file.read_text()
         lines = content.split("\n")
@@ -80,8 +89,8 @@ class TestLargeFileConflicts(unittest.TestCase):
 
         # Verify conflict markers exist
         content = self.large_file.read_text()
-        self.assertIn("<<<<<<", content)
-        self.assertIn(">>>>>>", content)
+        self.assertIn("<<<<<<<", content)
+        self.assertIn(">>>>>>>", content)
 
     def test_large_file_multiple_conflicts(self):
         """Test large file with multiple conflict regions."""
@@ -97,7 +106,7 @@ class TestLargeFileConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Branch A: multiple changes"], check=True, capture_output=True, timeout=10)
 
         # Branch B: modify same lines differently
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         content = self.large_file.read_text()
         lines = content.split("\n")
@@ -120,7 +129,7 @@ class TestLargeFileConflicts(unittest.TestCase):
 
         # Verify multiple conflict regions
         content = self.large_file.read_text()
-        conflict_count = content.count("<<<<<<")
+        conflict_count = content.count("<<<<<<<")
         self.assertGreaterEqual(conflict_count, 3, "Should have at least 3 conflict regions")
 
     def test_large_file_performance(self):
@@ -141,7 +150,7 @@ class TestLargeFileConflicts(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Branch A change"], check=True, capture_output=True, timeout=10)
 
         # Branch B: modify same line
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         content = self.large_file.read_text()
         lines = content.split("\n")
@@ -181,6 +190,15 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], check=True, capture_output=True, timeout=10)
 
+        # Get the default branch name dynamically
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        self.default_branch = result.stdout.strip()
+
     def tearDown(self):
         """Clean up test environment."""
         os.chdir(self.original_dir)
@@ -194,7 +212,7 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Branch A change"], check=True, capture_output=True, timeout=10)
 
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.test_file.write_text("Line 1\nLine 2 - Branch B\nLine 3\n")
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
@@ -211,7 +229,7 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         content = self.test_file.read_text()
         self.assertIn("Branch B", content, "Should contain our version (Branch B)")
         self.assertNotIn("Branch A", content, "Should not contain their version")
-        self.assertNotIn("<<<<<<", content, "Should not have conflict markers")
+        self.assertNotIn("<<<<<<<", content, "Should not have conflict markers")
 
     def test_conflict_resolution_theirs(self):
         """Test resolving conflict by choosing 'theirs' strategy."""
@@ -221,7 +239,7 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Branch A change"], check=True, capture_output=True, timeout=10)
 
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.test_file.write_text("Line 1\nLine 2 - Branch B\nLine 3\n")
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
@@ -238,7 +256,7 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         content = self.test_file.read_text()
         self.assertIn("Branch A", content, "Should contain their version (Branch A)")
         self.assertNotIn("Branch B", content, "Should not contain our version")
-        self.assertNotIn("<<<<<<", content, "Should not have conflict markers")
+        self.assertNotIn("<<<<<<<", content, "Should not have conflict markers")
 
     def test_conflict_resolution_manual(self):
         """Test manual conflict resolution by editing the file."""
@@ -248,7 +266,7 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Branch A change"], check=True, capture_output=True, timeout=10)
 
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.test_file.write_text("Line 1\nLine 2 - Branch B\nLine 3\n")
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
@@ -264,7 +282,7 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         # Verify manual resolution
         content = self.test_file.read_text()
         self.assertIn("Merged from A and B", content, "Should contain manual resolution")
-        self.assertNotIn("<<<<<<", content, "Should not have conflict markers")
+        self.assertNotIn("<<<<<<<", content, "Should not have conflict markers")
 
     def test_merge_abort(self):
         """Test aborting a merge with conflicts."""
@@ -274,7 +292,7 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Branch A change"], check=True, capture_output=True, timeout=10)
 
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         original_content = "Line 1\nLine 2 - Branch B\nLine 3\n"
         self.test_file.write_text(original_content)
@@ -297,7 +315,7 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         # Verify file is back to original state
         content = self.test_file.read_text()
         self.assertEqual(content, original_content, "File should be restored to pre-merge state")
-        self.assertNotIn("<<<<<<", content, "Conflict markers should be removed")
+        self.assertNotIn("<<<<<<<", content, "Conflict markers should be removed")
 
     def test_conflict_markers_verification(self):
         """Test verification that conflict markers are properly detected."""
@@ -307,7 +325,7 @@ class TestConflictResolutionStrategies(unittest.TestCase):
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Branch A change"], check=True, capture_output=True, timeout=10)
 
-        subprocess.run(["git", "checkout", "master"], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", self.default_branch], check=True, capture_output=True)
         subprocess.run(["git", "checkout", "-b", "branch-b"], check=True, capture_output=True)
         self.test_file.write_text("Line 1\nLine 2 - Branch B\nLine 3\n")
         subprocess.run(["git", "add", str(self.test_file)], check=True, capture_output=True)
