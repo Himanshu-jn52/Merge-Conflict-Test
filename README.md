@@ -219,6 +219,65 @@ python3 trigger.py 12345
 
 ### Testing
 
+#### Unit Tests
+
+The project includes a comprehensive test suite covering various merge conflict scenarios. Tests are located in the `tests/` directory and cover:
+
+**Test Coverage:**
+- Overlapping edits to same lines
+- Deleted vs modified conflicts
+- Binary file conflicts
+- Whitespace-only conflicts
+- Renamed file conflicts
+- New file conflicts
+- Complex multi-way conflicts
+- Large file conflicts
+- Conflict resolution strategies
+
+**Running Tests Locally:**
+
+```bash
+# Run all tests
+python3 -m unittest discover tests/
+
+# Run a specific test file
+python3 -m unittest tests.test_merge_conflicts
+
+# Run a specific test class
+python3 -m unittest tests.test_merge_conflicts.TestOverlappingEdits
+
+# Run a specific test method
+python3 -m unittest tests.test_merge_conflicts.TestOverlappingEdits.test_same_line_different_content
+
+# Run with verbose output
+python3 -m unittest discover tests/ -v
+```
+
+**Running Tests in CI:**
+
+```bash
+# CI environments should run all tests with verbose output and coverage
+python3 -m unittest discover tests/ -v
+
+# With coverage tracking (requires coverage.py)
+coverage run -m unittest discover tests/
+coverage report -m
+```
+
+**Test Suite Organization:**
+
+- `tests/test_merge_conflicts.py`: Tests for overlapping edits, delete-modify, binary files, and whitespace conflicts
+- `tests/test_conflict_detection.py`: Tests for renamed files, new files, and complex multi-way conflicts
+- `tests/test_conflict_resolution.py`: Tests for large files and resolution verification strategies
+
+**Notes:**
+- Each test creates a temporary git repository for isolation
+- Tests are deterministic and safe to run in parallel
+- All tests clean up after themselves automatically
+- Tests use standard unittest framework (no external dependencies required)
+
+#### Trigger Testing
+
 To test the trigger behavior:
 
 1. Create a test changelist
